@@ -1,0 +1,22 @@
+{
+  "name": "drive2-crawler",
+  "version": "0.1.0",
+  "description": "DRIVE2 Crawler",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loginov-rocks/Drive2-Crawler.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/loginov-rocks/Drive2-Crawler/issues"
+  },
+  "homepage": "https://github.com/loginov-rocks/Drive2-Crawler#readme",
+  "dependencies": {
+    "puppeteer": "^24.8.2"
+  }
+}
