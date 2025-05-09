@@ -92,6 +92,24 @@ async function navigateWithRetry(page, url, options = {}) {
  * @returns {string} - Markdown content
  */
 function convertHtmlToMarkdown(html, baseUrl) {
+  // Handle figure elements with images and captions
+  html = html.replace(/<figure class="c-post__pic[^"]*"[^>]*>[\s\S]*?(?:<img[^>]*src="([^"]*)"[^>]*>|<x-img[^>]*>[\s\S]*?<img[^>]*src="([^"]*)"[^>]*>)[\s\S]*?<figcaption class="c-post__desc"[^>]*>([\s\S]*?)<\/figcaption>[\s\S]*?<\/figure>/g, 
+    (match, src1, src2, caption) => {
+      const imgSrc = src1 || src2; // Use whichever source was captured
+      const captionText = caption.trim();
+      return `\n\n![${captionText}](${imgSrc})\n\n*${captionText}*\n\n`;
+    }
+  );
+  
+  // Handle figure elements with images but WITHOUT captions
+  html = html.replace(/<figure class="c-post__pic[^"]*"[^>]*>[\s\S]*?(?:<img[^>]*src="([^"]*)"[^>]*>|<x-img[^>]*>[\s\S]*?<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>)[\s\S]*?<\/figure>/g, 
+    (match, src1, src2, alt) => {
+      const imgSrc = src1 || src2; // Use whichever source was captured
+      const altText = alt ? alt.trim() : "Image";
+      return `\n\n![${altText}](${imgSrc})\n\n`;
+    }
+  );
+
   return html
     // Handle paragraphs
     .replace(/<p>(.*?)<\/p>/gs, '$1\n\n')
