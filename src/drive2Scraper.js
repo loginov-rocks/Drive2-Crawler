@@ -32,22 +32,61 @@ async function main() {
     await createDirectoryIfNotExists(outputDir);
     console.log(`Output directory: ${outputDir}`);
 
-    // Extract car review and save as Home.md
-    console.log('Extracting car review...');
-    const carReview = await extractCarReview(carUrl);
-    await fs.writeFile(path.join(outputDir, 'Home.md'), carReview);
-    console.log('Car review saved as Home.md');
+    // Create a tracking file path to record progress
+    const progressFilePath = path.join(outputDir, '.progress.json');
+    let processedPosts = [];
+    let reviewComplete = false;
+    
+    // Check if we have a progress file from previous run
+    try {
+      const progressData = await fs.readFile(progressFilePath, 'utf8');
+      const progress = JSON.parse(progressData);
+      processedPosts = progress.processedPosts || [];
+      reviewComplete = progress.reviewComplete || false;
+      console.log(`Resuming from previous progress. ${processedPosts.length} posts already processed.`);
+    } catch (error) {
+      // No progress file exists or invalid format, start fresh
+      console.log('Starting fresh extraction...');
+    }
+
+    // Extract car review and save as Home.md if not done yet
+    if (!reviewComplete) {
+      console.log('Extracting car review...');
+      try {
+        const carReview = await extractCarReview(carUrl);
+        await fs.writeFile(path.join(outputDir, 'Home.md'), carReview);
+        console.log('Car review saved as Home.md');
+        
+        // Update progress
+        await fs.writeFile(progressFilePath, JSON.stringify({
+          reviewComplete: true,
+          processedPosts: processedPosts
+        }));
+        reviewComplete = true;
+      } catch (error) {
+        console.error('Error extracting car review:', error.message);
+        console.error('Will continue with blog posts collection...');
+      }
+    } else {
+      console.log('Car review already extracted, skipping...');
+    }
 
     // Collect all blog posts
     console.log('Collecting blog posts...');
     const blogPosts = await collectBlogPosts(carUrl);
     console.log(`Found ${blogPosts.length} blog posts`);
 
+    // Filter out already processed posts
+    const remainingPosts = blogPosts.filter(post => 
+      !processedPosts.some(processedPost => processedPost.link === post.link)
+    );
+    console.log(`${remainingPosts.length} posts remaining to process`);
+
     // Extract and save each blog post
     console.log('Extracting blog posts content...');
-    for (let i = 0; i < blogPosts.length; i++) {
-      const post = blogPosts[i];
-      console.log(`Processing post ${i+1}/${blogPosts.length}: ${post.title}`);
+    for (let i = 0; i < remainingPosts.length; i++) {
+      const post = remainingPosts[i];
+      console.log(`Processing post ${i+1}/${remainingPosts.length}: ${post.title}`);
       
       try {
         // Format the date for the filename
@@ -68,10 +107,24 @@ async function main() {
         const fileName = `${dateStr} - ${safeTitle}.md`;
         const filePath = path.join(outputDir, fileName);
         
+        // Add some delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         // Extract and save the blog post
         const postContent = await extractBlogPost(post.link);
         await fs.writeFile(filePath, postContent);
         console.log(`Saved: ${fileName}`);
+        
+        // Update progress file after each successful post
+        processedPosts.push({
+          link: post.link,
+          title: post.title,
+          fileName: fileName
+        });
+        await fs.writeFile(progressFilePath, JSON.stringify({
+          reviewComplete,
+          processedPosts
+        }));
       } catch (error) {
         console.error(`Error processing post: ${post.title}`, error.message);
         // Continue with the next post even if one fails
@@ -95,25 +148,79 @@ async function createDirectoryIfNotExists(dirPath) {
   }
 }
 
+// Better approach to handle pagination
+async function getPageCount(page) {
+  try {
+    return await page.evaluate(() => {
+      // Look for pagination links, if any
+      const paginationLinks = document.querySelectorAll('a.c-page-link');
+      if (paginationLinks.length === 0) return 1;
+      
+      // Get the last pagination link which should be the highest page number
+      const pageNumbers = Array.from(paginationLinks)
+        .map(link => parseInt(link.textContent.trim()))
+        .filter(num => !isNaN(num));
+      
+      if (pageNumbers.length === 0) return 1;
+      return Math.max(...pageNumbers);
+    });
+  } catch (error) {
+    console.error('Error getting page count:', error.message);
+    return 1; // Default to 1 page if we can't determine the count
+  }
+}
+
 // Extract car review function (based on extractCarReview.js)
 async function extractCarReview(url) {
   // Launch the browser
   const browser = await puppeteer.launch({
-    headless: "new" // Use new headless mode
+    headless: "new", // Use new headless mode
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
   
   try {
     // Open a new page
     const page = await browser.newPage();
     
+    // Set a longer timeout for navigation
+    page.setDefaultNavigationTimeout(120000); // 2 minutes
+    
+    // Add headers to make requests more browser-like
+    await page.setExtraHTTPHeaders({
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+      'Cache-Control': 'max-age=0'
+    });
+    
     // Parse the base URL for constructing absolute URLs later
     const baseUrl = new URL(url).origin;
     
-    // Navigate to the URL
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 60000
-    });
+    // Navigate to the URL with retry logic
+    let retries = 3;
+    let success = false;
+    let lastError;
+    
+    while (retries > 0 && !success) {
+      try {
+        console.log(`Navigating to ${url} (${retries} attempts left)...`);
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 90000
+        });
+        success = true;
+      } catch (error) {
+        lastError = error;
+        console.log(`Navigation failed: ${error.message}. Retrying...`);
+        retries--;
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+    
+    if (!success) {
+      throw lastError || new Error('Failed to navigate to page after multiple attempts');
+    }
     
     // Extract the data we need
     const reviewData = await page.evaluate((baseUrlForPage) => {
@@ -162,111 +269,165 @@ async function extractCarReview(url) {
 async function collectBlogPosts(url) {
   // Launch the browser
   const browser = await puppeteer.launch({
-    headless: "new"
+    headless: "new",
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
   
   try {
     // Open a new page
     const page = await browser.newPage();
     
+    // Set a longer timeout for navigation
+    page.setDefaultNavigationTimeout(120000); // 2 minutes
+    
+    // Add headers to make requests more browser-like
+    await page.setExtraHTTPHeaders({
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+      'Cache-Control': 'no-cache'
+    });
+    
     // Parse the base URL for constructing absolute URLs
     const baseUrl = new URL(url).origin;
     
-    // Navigate to the URL
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 60000
-    });
+    // Navigate to the URL with retry logic
+    let retries = 3;
+    let success = false;
+    
+    while (retries > 0 && !success) {
+      try {
+        console.log(`Navigating to ${url} (${retries} attempts left)...`);
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 90000
+        });
+        success = true;
+      } catch (error) {
+        console.log(`Navigation failed: ${error.message}. Retrying...`);
+        retries--;
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+    
+    if (!success) {
+      throw new Error('Failed to navigate to the blog list page after multiple attempts');
+    }
     
     // Check if pagination exists and determine how many pages there are
-    const totalPages = await page.evaluate(() => {
-      // Look for pagination links, if any
-      const paginationLinks = document.querySelectorAll('a.c-page-link');
-      if (paginationLinks.length === 0) return 1;
-      
-      // Get the last pagination link which should be the highest page number
-      const lastPageLink = Array.from(paginationLinks).pop();
-      const lastPageNumber = parseInt(lastPageLink.textContent.trim());
-      return isNaN(lastPageNumber) ? 1 : lastPageNumber;
-    });
+    const totalPages = await getPageCount(page);
+    console.log(`Found ${totalPages} pages of blog posts`);
     
     let allPosts = [];
     
     // Process each page
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      // Add delay between page navigation to avoid rate limiting
       if (pageNum > 1) {
-        await page.goto(`${url}?page=${pageNum}`, {
-          waitUntil: 'networkidle2',
-          timeout: 60000
-        });
+        console.log(`Navigating to page ${pageNum}/${totalPages}...`);
+        
+        // Wait a bit before loading the next page
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Navigate with retry logic
+        let pageNavigationSuccess = false;
+        let pageRetries = 3;
+        
+        while (!pageNavigationSuccess && pageRetries > 0) {
+          try {
+            await page.goto(`${url}?page=${pageNum}`, {
+              waitUntil: 'domcontentloaded',
+              timeout: 90000
+            });
+            pageNavigationSuccess = true;
+          } catch (error) {
+            console.error(`Error navigating to page ${pageNum}: ${error.message}`);
+            pageRetries--;
+            if (pageRetries > 0) {
+              console.log(`Retrying... (${pageRetries} attempts left)`);
+              await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+          }
+        }
+        
+        if (!pageNavigationSuccess) {
+          console.error(`Failed to navigate to page ${pageNum}, skipping to next page`);
+          continue;
+        }
       }
       
       // Extract blog posts from the current page
-      const postsOnPage = await page.evaluate((baseUrlForPage) => {
-        // Get the logbook container
-        const logbookContainer = document.querySelector('.c-lb-list');
-        if (!logbookContainer) return [];
-        
-        const posts = [];
-        // Find all post cards
-        const postCards = logbookContainer.querySelectorAll('.x-box.c-post-lcard');
-        
-        // Process each post card
-        postCards.forEach(card => {
-          const link = card.getAttribute('href');
-          const absoluteLink = link && link.startsWith('/') ? `${baseUrlForPage}${link}` : link;
+      try {
+        const postsOnPage = await page.evaluate((baseUrlForPage) => {
+          // Get the logbook container
+          const logbookContainer = document.querySelector('.c-lb-list');
+          if (!logbookContainer) return [];
           
-          const titleElement = card.querySelector('.c-post-lcard__caption');
-          const title = titleElement ? titleElement.textContent.trim() : '';
+          const posts = [];
+          // Find all post cards
+          const postCards = logbookContainer.querySelectorAll('.x-box.c-post-lcard');
           
-          const categoryElement = card.querySelector('.u-text-overflow.x-secondary');
-          const category = categoryElement ? categoryElement.textContent.trim() : '';
-          
-          const metaElements = card.querySelectorAll('.c-post-lcard__meta > div');
-          const metadata = {};
-          
-          metaElements.forEach(element => {
-            // Extract likes
-            if (element.querySelector('.i-like-s')) {
-              metadata.likes = element.textContent.trim();
-            }
-            // Extract comments
-            else if (element.querySelector('.i-comments-s')) {
-              metadata.comments = element.textContent.trim();
-            }
-            // Extract date
-            else if (element.hasAttribute('data-tt')) {
-              metadata.date = element.getAttribute('data-tt');
-            }
-            // Extract price if present
-            else if (element.textContent.includes('₽')) {
-              metadata.price = element.textContent.trim();
-            }
-            // Extract mileage if present
-            else if (element.hasAttribute('title') && element.getAttribute('title').includes('миля') || 
-                     element.getAttribute('title')?.includes('км')) {
-              metadata.mileage = element.textContent.trim();
-            }
+          // Process each post card
+          postCards.forEach(card => {
+            const link = card.getAttribute('href');
+            const absoluteLink = link && link.startsWith('/') ? `${baseUrlForPage}${link}` : link;
+            
+            const titleElement = card.querySelector('.c-post-lcard__caption');
+            const title = titleElement ? titleElement.textContent.trim() : '';
+            
+            const categoryElement = card.querySelector('.u-text-overflow.x-secondary');
+            const category = categoryElement ? categoryElement.textContent.trim() : '';
+            
+            const metaElements = card.querySelectorAll('.c-post-lcard__meta > div');
+            const metadata = {};
+            
+            metaElements.forEach(element => {
+              // Extract likes
+              if (element.querySelector('.i-like-s')) {
+                metadata.likes = element.textContent.trim();
+              }
+              // Extract comments
+              else if (element.querySelector('.i-comments-s')) {
+                metadata.comments = element.textContent.trim();
+              }
+              // Extract date
+              else if (element.hasAttribute('data-tt')) {
+                metadata.date = element.getAttribute('data-tt');
+              }
+              // Extract price if present
+              else if (element.textContent.includes('₽')) {
+                metadata.price = element.textContent.trim();
+              }
+              // Extract mileage if present
+              else if (element.hasAttribute('title') && element.getAttribute('title').includes('миля') || 
+                      element.getAttribute('title')?.includes('км')) {
+                metadata.mileage = element.textContent.trim();
+              }
+            });
+            
+            // Get image URL if available
+            const imageElement = card.querySelector('img');
+            const imageUrl = imageElement ? imageElement.getAttribute('src') : null;
+            
+            posts.push({
+              title,
+              link: absoluteLink,
+              category,
+              imageUrl,
+              ...metadata
+            });
           });
           
-          // Get image URL if available
-          const imageElement = card.querySelector('img');
-          const imageUrl = imageElement ? imageElement.getAttribute('src') : null;
-          
-          posts.push({
-            title,
-            link: absoluteLink,
-            category,
-            imageUrl,
-            ...metadata
-          });
-        });
+          return posts;
+        }, baseUrl);
         
-        return posts;
-      }, baseUrl);
-      
-      allPosts = [...allPosts, ...postsOnPage];
-      console.log(`Collected ${postsOnPage.length} posts from page ${pageNum}/${totalPages}`);
+        allPosts = [...allPosts, ...postsOnPage];
+        console.log(`Collected ${postsOnPage.length} posts from page ${pageNum}/${totalPages}`);
+      } catch (error) {
+        console.error(`Error extracting posts from page ${pageNum}: ${error.message}`);
+        console.error('Continuing with the next page...');
+      }
     }
     
     return allPosts;
@@ -280,21 +441,53 @@ async function collectBlogPosts(url) {
 async function extractBlogPost(url) {
   // Launch the browser
   const browser = await puppeteer.launch({
-    headless: "new" // Use new headless mode
+    headless: "new", // Use new headless mode
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
   
   try {
     // Open a new page
     const page = await browser.newPage();
     
+    // Set a longer timeout for navigation
+    page.setDefaultNavigationTimeout(120000); // 2 minutes
+    
+    // Add headers to make requests more browser-like
+    await page.setExtraHTTPHeaders({
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+      'Cache-Control': 'max-age=0'
+    });
+    
     // Parse the base URL for constructing absolute URLs
     const baseUrl = url.startsWith('http') ? new URL(url).origin : 'https://www.drive2.ru';
     
-    // Navigate to the URL
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 60000
-    });
+    // Navigate to the URL with retry logic
+    let retries = 3;
+    let success = false;
+    let lastError;
+    
+    while (retries > 0 && !success) {
+      try {
+        console.log(`Navigating to ${url} (${retries} attempts left)...`);
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded', // Try with a less strict wait condition
+          timeout: 90000 // 1.5 minutes
+        });
+        success = true;
+      } catch (error) {
+        lastError = error;
+        console.log(`Navigation failed: ${error.message}. Retrying...`);
+        retries--;
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+    
+    if (!success) {
+      throw lastError || new Error('Failed to navigate to page after multiple attempts');
+    }
     
     // Extract the data we need
     const postData = await page.evaluate((baseUrlForPage) => {
