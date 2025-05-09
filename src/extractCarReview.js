@@ -11,6 +11,9 @@ async function extractCarReview(url) {
     // Open a new page
     const page = await browser.newPage();
     
+    // Parse the base URL for constructing absolute URLs later
+    const baseUrl = new URL(url).origin;
+    
     // Navigate to the URL or use provided HTML content
     if (url.startsWith('http')) {
       await page.goto(url, {
@@ -22,7 +25,7 @@ async function extractCarReview(url) {
     }
     
     // Extract the data we need
-    const reviewData = await page.evaluate(() => {
+    const reviewData = await page.evaluate((baseUrlForPage) => {
       // Get the car title
       const title = document.querySelector('h1.x-title')?.textContent.trim() || 'Unknown Car';
       
@@ -41,20 +44,20 @@ async function extractCarReview(url) {
         }
       }
       
-      return { title, reviewContent, passportContent };
-    });
+      return { title, reviewContent, passportContent, baseUrl: baseUrlForPage };
+    }, baseUrl);
     
     // Convert to Markdown format
     let markdown = `# ${reviewData.title}\n\n`;
     
     if (reviewData.reviewContent) {
-      markdown += `## Отзыв владельца\n\n${convertHtmlToMarkdown(reviewData.reviewContent)}\n\n`;
+      markdown += `## Отзыв владельца\n\n${convertHtmlToMarkdown(reviewData.reviewContent, reviewData.baseUrl)}\n\n`;
     } else {
       markdown += `## Отзыв владельца\n\nНе удалось найти отзыв владельца.\n\n`;
     }
     
     if (reviewData.passportContent) {
-      markdown += `## Паспортные данные\n\n${convertHtmlToMarkdown(reviewData.passportContent)}`;
+      markdown += `## Паспортные данные\n\n${convertHtmlToMarkdown(reviewData.passportContent, reviewData.baseUrl)}`;
     }
     
     return markdown;
@@ -64,7 +67,7 @@ async function extractCarReview(url) {
   }
 }
 
-function convertHtmlToMarkdown(html) {
+function convertHtmlToMarkdown(html, baseUrl) {
   return html
     // Handle paragraphs
     .replace(/<p>(.*?)<\/p>/gs, '$1\n\n')
@@ -77,8 +80,19 @@ function convertHtmlToMarkdown(html) {
     .replace(/<em>(.*?)<\/em>/gs, '*$1*')
     .replace(/<del>(.*?)<\/del>/gs, '~~$1~~')
     
-    // Handle links
-    .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gs, '[$2]($1)')
+    // Handle links - convert relative URLs to absolute
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gs, (match, url, text) => {
+      // Check if it's a relative URL and make it absolute
+      if (url && !url.startsWith('http') && !url.startsWith('#') && !url.startsWith('mailto:')) {
+        // Handle URLs that start with / or without /
+        if (url.startsWith('/')) {
+          url = `${baseUrl}${url}`;
+        } else {
+          url = `${baseUrl}/${url}`;
+        }
+      }
+      return `[${text}](${url})`;
+    })
     
     // Handle lists
     .replace(/<li>(.*?)<\/li>/gs, '- $1\n')
