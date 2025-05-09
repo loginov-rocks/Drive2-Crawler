@@ -71,18 +71,25 @@ async function extractPostsFromPage(page, baseUrl) {
           else if (element.querySelector('.i-comments-s')) {
             metadata.comments = element.textContent.trim();
           }
-          // Extract date
+          // Check if element has data-tt attribute
           else if (element.hasAttribute('data-tt')) {
-            metadata.date = element.getAttribute('data-tt');
+            const tooltipText = element.getAttribute('data-tt');
+            
+            // Check if it's a date (contains month names or date format patterns)
+            const isDate = /[а-я]+ \d{4}|^\d{1,2} [а-я]+ \d{4}/i.test(tooltipText);
+            
+            // Check if it's mileage (contains миль or км)
+            const isMileage = /миль|км/i.test(tooltipText);
+            
+            if (isDate && !isMileage) {
+              metadata.date = tooltipText;
+            } else if (isMileage) {
+              metadata.mileage = element.textContent.trim();
+            }
           }
           // Extract price if present
           else if (element.textContent.includes('₽')) {
             metadata.price = element.textContent.trim();
-          }
-          // Extract mileage if present
-          else if (element.hasAttribute('title') && element.getAttribute('title').includes('миля') || 
-                  element.getAttribute('title')?.includes('км')) {
-            metadata.mileage = element.textContent.trim();
           }
         });
         

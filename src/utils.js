@@ -148,18 +148,40 @@ function createSafeFilename(title) {
 }
 
 /**
- * Format date from DD.MM.YYYY to YYYY-MM-DD
- * @param {string} dateStr - Date string in DD.MM.YYYY format
+ * Format date from various formats to YYYY-MM-DD
+ * @param {string} dateStr - Date string in various formats
  * @returns {string} - Date in YYYY-MM-DD format or 'unknown-date' if invalid
  */
 function formatDate(dateStr) {
   if (!dateStr) return 'unknown-date';
   
-  const dateMatch = dateStr.match(/(\d{2}\.\d{2}\.\d{4})/);
-  if (dateMatch && dateMatch[1]) {
-    const parts = dateMatch[1].split('.');
-    if (parts.length === 3) {
-      return `${parts[2]}-${parts[1]}-${parts[0]}`; // Convert DD.MM.YYYY to YYYY-MM-DD
+  // Try to parse ISO date format first (YYYY-MM-DDTHH:MM:SS+HH:MM)
+  const isoMatch = dateStr.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch && isoMatch[1]) {
+    return isoMatch[1]; // Already in YYYY-MM-DD format
+  }
+  
+  // Try DD.MM.YYYY format
+  const dotMatch = dateStr.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  if (dotMatch) {
+    return `${dotMatch[3]}-${dotMatch[2]}-${dotMatch[1]}`;
+  }
+  
+  // Try to extract date from Russian format like "19 января 2014 в 15:18"
+  const russianMonths = {
+    'января': '01', 'февраля': '02', 'марта': '03', 'апреля': '04',
+    'мая': '05', 'июня': '06', 'июля': '07', 'августа': '08',
+    'сентября': '09', 'октября': '10', 'ноября': '11', 'декабря': '12'
+  };
+  
+  const russianMatch = dateStr.match(/(\d{1,2})\s+([а-яА-Я]+)\s+(\d{4})/);
+  if (russianMatch) {
+    const day = russianMatch[1].padStart(2, '0');
+    const month = russianMonths[russianMatch[2].toLowerCase()];
+    const year = russianMatch[3];
+    
+    if (month) {
+      return `${year}-${month}-${day}`;
     }
   }
   
