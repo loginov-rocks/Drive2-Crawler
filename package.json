@@ -1,10 +1,10 @@
 {
   "name": "drive2-crawler",
   "version": "0.1.0",
-  "description": "DRIVE2 Crawler",
-  "main": "index.js",
+  "description": "A tool to scrape car reviews and blog posts from DRIVE2 website",
+  "main": "src/drive2Scraper.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/drive2Scraper.js"
   },
   "repository": {
     "type": "git",
@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/loginov-rocks/Drive2-Crawler#readme",
   "dependencies": {
-    "puppeteer": "^24.8.2"
+    "puppeteer": "^24.8.2",
+    "yargs": "^17.7.2"
   }
 }
