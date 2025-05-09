@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "A tool to scrape car reviews and blog posts from DRIVE2 website",
   "main": "src/drive2Scraper.js",
+  "bin": {
+    "drive2-scraper": "./src/drive2Scraper.js"
+  },
   "scripts": {
     "start": "node src/drive2Scraper.js"
   },

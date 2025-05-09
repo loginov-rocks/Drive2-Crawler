@@ -1,28 +1,96 @@
 const puppeteer = require('puppeteer');
-const fs = require('fs').promises;
+const { 
+  getBrowserConfig, 
+  getPageConfig, 
+  navigateWithRetry, 
+  convertHtmlToMarkdown 
+} = require('./utils');
 
+/**
+ * Generate markdown for blog post
+ * @param {Object} postData - Blog post data
+ * @returns {string} - Markdown content
+ */
+function generateMarkdown(postData) {
+  let markdown = `# ${postData.title}\n\n`;
+  
+  // Add publication date
+  if (postData.publicationDate) {
+    markdown += `*Published: ${postData.publicationDate}*\n\n`;
+  }
+  
+  // Add author information
+  markdown += `**Author:** [${postData.author.name}](${postData.baseUrl}${postData.author.url})\n`;
+  
+  if (postData.author.location) {
+    markdown += `**Location:** ${postData.author.location}\n`;
+  }
+  
+  if (postData.author.cars.length > 0) {
+    markdown += `**Cars:** `;
+    postData.author.cars.forEach((car, index) => {
+      const carUrl = car.url.startsWith('/') ? `${postData.baseUrl}${car.url}` : car.url;
+      
+      if (index > 0) {
+        markdown += `, `;
+      }
+      
+      markdown += `[${car.name}](${carUrl})`;
+    });
+    markdown += `\n\n`;
+  } else {
+    markdown += `\n`;
+  }
+  
+  // Add horizontal rule
+  markdown += `---\n\n`;
+  
+  // Add metadata
+  if (postData.metadata.cost || postData.metadata.mileage) {
+    markdown += `## Metadata\n\n`;
+    
+    if (postData.metadata.cost) {
+      markdown += `* ${postData.metadata.cost}\n`;
+    }
+    
+    if (postData.metadata.mileage) {
+      markdown += `* ${postData.metadata.mileage}\n`;
+    }
+    
+    markdown += `\n`;
+  }
+  
+  // Add main content
+  markdown += `## Content\n\n`;
+  markdown += convertHtmlToMarkdown(postData.contentHtml, postData.baseUrl);
+  
+  return markdown;
+}
+
+/**
+ * Extracts content from a blog post
+ * @param {string} url - URL of the blog post
+ * @returns {Promise<string>} - Markdown content of the blog post
+ */
 async function extractBlogPost(url) {
   // Launch the browser
-  const browser = await puppeteer.launch({
-    headless: "new" // Use new headless mode
-  });
+  const browser = await puppeteer.launch(getBrowserConfig());
   
   try {
     // Open a new page
     const page = await browser.newPage();
     
+    // Set a longer timeout for navigation
+    page.setDefaultNavigationTimeout(getPageConfig().timeout);
+    
+    // Add headers to make requests more browser-like
+    await page.setExtraHTTPHeaders(getPageConfig().headers);
+    
     // Parse the base URL for constructing absolute URLs
     const baseUrl = url.startsWith('http') ? new URL(url).origin : 'https://www.drive2.ru';
     
-    // Navigate to the URL or use provided HTML content
-    if (url.startsWith('http')) {
-      await page.goto(url, {
-        waitUntil: 'networkidle2',
-        timeout: 60000
-      });
-    } else {
-      await page.setContent(url, { waitUntil: 'networkidle0' });
-    }
+    // Navigate to the URL with retry logic
+    await navigateWithRetry(page, url);
     
     // Extract the data we need
     const postData = await page.evaluate((baseUrlForPage) => {
@@ -98,145 +166,4 @@ async function extractBlogPost(url) {
   }
 }
 
-function generateMarkdown(postData) {
-  let markdown = `# ${postData.title}\n\n`;
-  
-  // Add publication date
-  if (postData.publicationDate) {
-    markdown += `*Published: ${postData.publicationDate}*\n\n`;
-  }
-  
-  // Add author information
-  markdown += `**Author:** [${postData.author.name}](${postData.baseUrl}${postData.author.url})\n`;
-  
-  if (postData.author.location) {
-    markdown += `**Location:** ${postData.author.location}\n`;
-  }
-  
-  if (postData.author.cars.length > 0) {
-    markdown += `**Cars:** `;
-    postData.author.cars.forEach((car, index) => {
-      const carUrl = car.url.startsWith('/') ? `${postData.baseUrl}${car.url}` : car.url;
-      
-      if (index > 0) {
-        markdown += `, `;
-      }
-      
-      markdown += `[${car.name}](${carUrl})`;
-    });
-    markdown += `\n\n`;
-  } else {
-    markdown += `\n`;
-  }
-  
-  // Add horizontal rule
-  markdown += `---\n\n`;
-  
-  // Add metadata
-  if (postData.metadata.cost || postData.metadata.mileage) {
-    markdown += `## Metadata\n\n`;
-    
-    if (postData.metadata.cost) {
-      markdown += `* ${postData.metadata.cost}\n`;
-    }
-    
-    if (postData.metadata.mileage) {
-      markdown += `* ${postData.metadata.mileage}\n`;
-    }
-    
-    markdown += `\n`;
-  }
-  
-  // Add main content
-  markdown += `## Content\n\n`;
-  markdown += convertHtmlToMarkdown(postData.contentHtml, postData.baseUrl);
-  
-  return markdown;
-}
-
-function convertHtmlToMarkdown(html, baseUrl) {
-  return html
-    // Handle paragraphs
-    .replace(/<p>(.*?)<\/p>/gs, '$1\n\n')
-    
-    // Handle line breaks
-    .replace(/<br\s*\/?>/g, '\n')
-    
-    // Handle formatting
-    .replace(/<strong>(.*?)<\/strong>/gs, '**$1**')
-    .replace(/<em>(.*?)<\/em>/gs, '*$1*')
-    .replace(/<del>(.*?)<\/del>/gs, '~~$1~~')
-    
-    // Handle links - convert relative URLs to absolute
-    .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gs, (match, url, text) => {
-      // Check if it's a relative URL and make it absolute
-      if (url && !url.startsWith('http') && !url.startsWith('#') && !url.startsWith('mailto:')) {
-        // Handle URLs that start with / or without /
-        if (url.startsWith('/')) {
-          url = `${baseUrl}${url}`;
-        } else {
-          url = `${baseUrl}/${url}`;
-        }
-      }
-      return `[${text}](${url})`;
-    })
-    
-    // Handle lists
-    .replace(/<li>(.*?)<\/li>/gs, '- $1\n')
-    .replace(/<ul[^>]*>/g, '')
-    .replace(/<\/ul>/g, '\n')
-    
-    // Handle images from figures
-    .replace(/<figure class="c-post__pic"[^>]*>.*?<img[^>]*src="([^"]*)".*?<figcaption[^>]*>(.*?)<\/figcaption>.*?<\/figure>/gs, 
-      (match, src, caption) => {
-        return `\n\n![${caption}](${src})\n*${caption}*\n\n`;
-      })
-    
-    // Remove other HTML tags
-    .replace(/<[^>]*>/g, '')
-    
-    // Fix HTML entities
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    
-    // Clean up extra whitespace
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-// Usage example
-async function extractAndSaveBlogPost(url, outputFile) {
-  try {
-    // Extract the blog post
-    const markdown = await extractBlogPost(url);
-    
-    // Save to file
-    await fs.writeFile(outputFile, markdown);
-    console.log(`Blog post successfully extracted and saved to ${outputFile}`);
-    
-    return markdown;
-  } catch (error) {
-    console.error('Error extracting blog post:', error);
-    throw error;
-  }
-}
-
-// Usage
-(async () => {
-  // URL of the blog post page
-  // This can be a URL or the HTML content as a string
-  const blogPostUrl = 'https://www.drive2.ru/l/2790417/';
-  
-  try {
-    // Extract and save the blog post
-    const markdown = await extractAndSaveBlogPost(blogPostUrl, 'toyota_chaser_blog_post.md');
-    
-    // Print the result
-    console.log('Extraction completed successfully!');
-  } catch (error) {
-    console.error('Error extracting blog post:', error);
-  }
-})();
+module.exports = extractBlogPost;
