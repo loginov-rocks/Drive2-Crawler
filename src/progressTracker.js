@@ -18,7 +18,7 @@ class ProgressTracker {
     };
     this.loaded = false;
   }
-  
+
   /**
    * Load progress data from file
    * @returns {Promise<boolean>} - True if progress data was loaded
@@ -37,7 +37,7 @@ class ProgressTracker {
       return false;
     }
   }
-  
+
   /**
    * Save progress data to file
    * @returns {Promise<void>}
@@ -45,7 +45,7 @@ class ProgressTracker {
   async save() {
     await fs.writeFile(this.filePath, JSON.stringify(this.data, null, 2));
   }
-  
+
   /**
    * Check if review has been completed
    * @returns {boolean}
@@ -53,7 +53,7 @@ class ProgressTracker {
   isReviewComplete() {
     return this.data.reviewComplete;
   }
-  
+
   /**
    * Mark review as complete
    * @returns {Promise<void>}
@@ -62,7 +62,7 @@ class ProgressTracker {
     this.data.reviewComplete = true;
     await this.save();
   }
-  
+
   /**
    * Check if a post has been processed
    * @param {Object} post - Post to check
@@ -71,7 +71,7 @@ class ProgressTracker {
   isPostProcessed(post) {
     return this.data.processedPosts.some(p => p.link === post.link);
   }
-  
+
   /**
    * Mark a post as processed
    * @param {Object} post - Post that was processed
@@ -86,7 +86,7 @@ class ProgressTracker {
     });
     await this.save();
   }
-  
+
   /**
    * Get number of processed posts
    * @returns {number}
@@ -94,7 +94,7 @@ class ProgressTracker {
   getProcessedCount() {
     return this.data.processedPosts.length;
   }
-  
+
   /**
    * Filter posts to get only unprocessed ones
    * @param {Array} posts - All posts

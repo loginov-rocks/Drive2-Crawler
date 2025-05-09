@@ -42,7 +42,7 @@ async function main() {
     // Initialize progress tracker
     const progress = new ProgressTracker(outputDir);
     await progress.load();
-    
+
     if (progress.getProcessedCount() > 0) {
       console.log(`Resuming from previous progress. ${progress.getProcessedCount()} posts already processed.`);
     } else {
@@ -56,7 +56,7 @@ async function main() {
         const carReview = await extractCarReview(carUrl);
         await fs.writeFile(path.join(outputDir, 'Home.md'), carReview);
         console.log('Car review saved as Home.md');
-        
+
         // Update progress
         await progress.markReviewComplete();
       } catch (error) {
@@ -80,25 +80,25 @@ async function main() {
     console.log('Extracting blog posts content...');
     for (let i = 0; i < remainingPosts.length; i++) {
       const post = remainingPosts[i];
-      console.log(`Processing post ${i+1}/${remainingPosts.length}: ${post.title}`);
-      
+      console.log(`Processing post ${i + 1}/${remainingPosts.length}: ${post.title}`);
+
       try {
         // Format the date for the filename
         const dateStr = formatDate(post.date);
-        
+
         // Format the title for the filename (remove invalid characters)
         const safeTitle = createSafeFilename(post.title);
         const fileName = `${dateStr} - ${safeTitle}.md`;
         const filePath = path.join(outputDir, fileName);
-        
+
         // Add some delay between requests to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
         // Extract and save the blog post
         const postContent = await extractBlogPost(post.link);
         await fs.writeFile(filePath, postContent);
         console.log(`Saved: ${fileName}`);
-        
+
         // Update progress file after each successful post
         await progress.markPostProcessed(post, fileName);
       } catch (error) {
