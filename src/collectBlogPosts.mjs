@@ -1,9 +1,6 @@
-const puppeteer = require('puppeteer');
-const {
-  getBrowserConfig,
-  getPageConfig,
-  navigateWithRetry
-} = require('./utils');
+import puppeteer from 'puppeteer';
+
+import { getBrowserConfig, getPageConfig, navigateWithRetry } from './utils.mjs';
 
 /**
  * Get the number of pages for pagination
@@ -119,7 +116,7 @@ async function extractPostsFromPage(page, baseUrl) {
  * @param {string} url - URL of the car page
  * @returns {Promise<Array>} - Array of blog posts
  */
-async function collectBlogPosts(url) {
+export async function collectBlogPosts(url) {
   // Launch the browser
   const browser = await puppeteer.launch(getBrowserConfig());
 
@@ -176,5 +173,3 @@ async function collectBlogPosts(url) {
     await browser.close();
   }
 }
-
-module.exports = collectBlogPosts;

@@ -21,30 +21,18 @@ A Node.js application that scrapes car reviews and blog posts from DRIVE2 websit
 npm install
 ```
 
-3. (Optional) Make it globally available:
-
-```bash
-npm link
-```
-
 ## Usage
 
 Run the application with the following command:
 
 ```bash
-node drive2Scraper.js --input <DRIVE2_URL> --output <OUTPUT_DIRECTORY>
-```
-
-Or if installed globally:
-
-```bash
-drive2-scraper --input <DRIVE2_URL> --output <OUTPUT_DIRECTORY>
+npm start --input=<DRIVE2_URL> --output=<OUTPUT_DIRECTORY>
 ```
 
 Example:
 
 ```bash
-node drive2Scraper.js --input https://www.drive2.ru/r/toyota/chaser/288230376151952785/ --output ./toyota_chaser
+npm start --input=https://www.drive2.ru/r/toyota/chaser/288230376151952785/ --output=./toyota_chaser
 ```
 
 ### Arguments

@@ -1,10 +1,10 @@
-const fs = require('fs').promises;
-const path = require('path');
+import { promises as fs } from 'fs';
+import path from 'path';
 
 /**
  * Class to track progress of the extraction process
  */
-class ProgressTracker {
+export class ProgressTracker {
   /**
    * Create a progress tracker
    * @param {string} outputDir - Directory where files will be saved
@@ -104,5 +104,3 @@ class ProgressTracker {
     return posts.filter(post => !this.isPostProcessed(post));
   }
 }
-
-module.exports = ProgressTracker;

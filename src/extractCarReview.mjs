@@ -1,17 +1,13 @@
-const puppeteer = require('puppeteer');
-const {
-  getBrowserConfig,
-  getPageConfig,
-  navigateWithRetry,
-  convertHtmlToMarkdown
-} = require('./utils');
+import puppeteer from 'puppeteer';
+
+import { getBrowserConfig, getPageConfig, navigateWithRetry, convertHtmlToMarkdown } from './utils.mjs';
 
 /**
  * Extracts car review from DRIVE2 car page
  * @param {string} url - URL of the car page
  * @returns {Promise<string>} - Markdown content of the car review
  */
-async function extractCarReview(url) {
+export async function extractCarReview(url) {
   // Launch the browser
   const browser = await puppeteer.launch(getBrowserConfig());
 
@@ -73,5 +69,3 @@ async function extractCarReview(url) {
     await browser.close();
   }
 }
-
-module.exports = extractCarReview;

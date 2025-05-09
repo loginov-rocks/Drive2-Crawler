@@ -1,10 +1,6 @@
-const puppeteer = require('puppeteer');
-const {
-  getBrowserConfig,
-  getPageConfig,
-  navigateWithRetry,
-  convertHtmlToMarkdown
-} = require('./utils');
+import puppeteer from 'puppeteer';
+
+import { getBrowserConfig, getPageConfig, navigateWithRetry, convertHtmlToMarkdown } from './utils.mjs';
 
 /**
  * Generate markdown for blog post
@@ -72,7 +68,7 @@ function generateMarkdown(postData) {
  * @param {string} url - URL of the blog post
  * @returns {Promise<string>} - Markdown content of the blog post
  */
-async function extractBlogPost(url) {
+export async function extractBlogPost(url) {
   // Launch the browser
   const browser = await puppeteer.launch(getBrowserConfig());
 
@@ -165,5 +161,3 @@ async function extractBlogPost(url) {
     await browser.close();
   }
 }
-
-module.exports = extractBlogPost;

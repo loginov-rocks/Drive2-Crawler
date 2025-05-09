@@ -1,10 +1,10 @@
-const fs = require('fs').promises;
+import { promises as fs } from 'fs';
 
 /**
  * Creates a directory if it doesn't exist
  * @param {string} dirPath - Path to the directory
  */
-async function createDirectoryIfNotExists(dirPath) {
+export async function createDirectoryIfNotExists(dirPath) {
   try {
     await fs.access(dirPath);
   } catch (error) {
@@ -17,7 +17,7 @@ async function createDirectoryIfNotExists(dirPath) {
  * Creates browser configuration for puppeteer
  * @returns {Object} - Puppeteer launch configuration
  */
-function getBrowserConfig() {
+export function getBrowserConfig() {
   return {
     headless: "new",
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
@@ -28,7 +28,7 @@ function getBrowserConfig() {
  * Gets common page configuration settings
  * @returns {Object} - Configuration for page setup
  */
-function getPageConfig() {
+export function getPageConfig() {
   return {
     timeout: 120000, // 2 minutes
     headers: {
@@ -51,7 +51,7 @@ function getPageConfig() {
  * @param {Object} options - Navigation options
  * @returns {Promise<boolean>} - Success status
  */
-async function navigateWithRetry(page, url, options = {}) {
+export async function navigateWithRetry(page, url, options = {}) {
   const navigationOptions = {
     ...getPageConfig().navigationOptions,
     ...options
@@ -91,7 +91,7 @@ async function navigateWithRetry(page, url, options = {}) {
  * @param {string} baseUrl - Base URL for resolving relative URLs
  * @returns {string} - Markdown content
  */
-function convertHtmlToMarkdown(html, baseUrl) {
+export function convertHtmlToMarkdown(html, baseUrl) {
   // Handle figure elements with images and captions
   html = html.replace(/<figure class="c-post__pic[^"]*"[^>]*>[\s\S]*?(?:<img[^>]*src="([^"]*)"[^>]*>|<x-img[^>]*>[\s\S]*?<img[^>]*src="([^"]*)"[^>]*>)[\s\S]*?<figcaption class="c-post__desc"[^>]*>([\s\S]*?)<\/figcaption>[\s\S]*?<\/figure>/g,
     (match, src1, src2, caption) => {
@@ -161,7 +161,7 @@ function convertHtmlToMarkdown(html, baseUrl) {
  * @param {string} title - Original title
  * @returns {string} - Safe filename
  */
-function createSafeFilename(title) {
+export function createSafeFilename(title) {
   return title.replace(/[/\\?%*:|"<>]/g, '-').trim();
 }
 
@@ -170,7 +170,7 @@ function createSafeFilename(title) {
  * @param {string} dateStr - Date string in various formats
  * @returns {string} - Date in YYYY-MM-DD format or 'unknown-date' if invalid
  */
-function formatDate(dateStr) {
+export function formatDate(dateStr) {
   if (!dateStr) return 'unknown-date';
 
   // Try to parse ISO date format first (YYYY-MM-DDTHH:MM:SS+HH:MM)
@@ -205,13 +205,3 @@ function formatDate(dateStr) {
 
   return 'unknown-date';
 }
-
-module.exports = {
-  createDirectoryIfNotExists,
-  getBrowserConfig,
-  getPageConfig,
-  navigateWithRetry,
-  convertHtmlToMarkdown,
-  createSafeFilename,
-  formatDate
-};

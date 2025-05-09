@@ -2,23 +2,21 @@
   "name": "drive2-crawler",
   "version": "0.1.0",
   "description": "A tool to scrape car reviews and blog posts from DRIVE2 website",
-  "main": "src/drive2Scraper.js",
-  "bin": {
-    "drive2-scraper": "./src/drive2Scraper.js"
-  },
+  "main": "src/app.mjs",
   "scripts": {
-    "start": "node src/drive2Scraper.js"
+    "start": "node src/app.mjs --input=\"$npm_config_input\" --output=\"$npm_config_output\""
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/loginov-rocks/Drive2-Crawler.git"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Danila Loginov <danila@loginov.rocks> (https://loginov.rocks)",
+  "license": "MIT",
+  "private": true,
   "bugs": {
     "url": "https://github.com/loginov-rocks/Drive2-Crawler/issues"
   },
-  "homepage": "https://github.com/loginov-rocks/Drive2-Crawler#readme",
+  "homepage": "https://github.com/loginov-rocks/Drive2-Crawler",
   "dependencies": {
     "puppeteer": "^24.8.2",
     "yargs": "^17.7.2"

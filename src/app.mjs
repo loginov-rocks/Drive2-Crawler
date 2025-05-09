@@ -1,15 +1,14 @@
-#!/usr/bin/env node
-const fs = require('fs').promises;
-const path = require('path');
-const yargs = require('yargs/yargs');
-const { hideBin } = require('yargs/helpers');
+import { promises as fs } from 'fs';
+import path from 'path';
+import yargs from 'yargs/yargs';
+import { hideBin } from 'yargs/helpers';
 
 // Import modules
-const extractCarReview = require('./extractCarReview');
-const collectBlogPosts = require('./collectBlogPosts');
-const extractBlogPost = require('./extractBlogPost');
-const ProgressTracker = require('./progressTracker');
-const { createDirectoryIfNotExists, formatDate, createSafeFilename } = require('./utils');
+import { extractCarReview } from './extractCarReview.mjs';
+import { collectBlogPosts } from './collectBlogPosts.mjs';
+import { extractBlogPost } from './extractBlogPost.mjs';
+import { ProgressTracker } from './progressTracker.mjs';
+import { createDirectoryIfNotExists, formatDate, createSafeFilename } from './utils.mjs';
 
 // Parse command line arguments
 const argv = yargs(hideBin(process.argv))
